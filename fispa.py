@@ -50,7 +50,7 @@ menu = st.sidebar.radio("Menu", ["Início", "Requerimento", "Dashboard", "Export
 # Tela Início
 if menu == "Início":
     st.header("Bem-vindo ao Sistema FISPA!")
-    st.image("img\coordenador.jpg", caption="Coordenador", width=600)
+    st.image("coordenador.jpg", caption="Coordenador", width=600)
     st.write("Use o menu ao lado para navegar pelo sistema.")
 
 # Tela Requerimento

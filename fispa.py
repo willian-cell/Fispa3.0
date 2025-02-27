@@ -67,7 +67,17 @@ elif menu == "Requerimento":
     nome = st.text_input("Nome")
     cpf = st.text_input("CPF")
     telefone = st.text_input("Telefone")
-    bairro = st.selectbox("Bairro", ["Aldeia da Paz", "Centro", "Parque das Rosas", "Vila União", "Outros"])
+    bairro = st.selectbox("Bairro", [
+        "Aldeia da Paz", "Área Rural de Santo Antônio do Descoberto", "Beira Rio", "Beira Rio II", "Centro",
+        "Conjunto Habitacional Conceição Gomes Rabelo", "Fazenda Capoeirinha", "Jardim Ana Beatriz I",
+        "Jardim Ana Beatriz II", "Jardim de Alá", "Mansões Bittencourt", "Meu Lote Minha Casa",
+        "Parque das Rosas", "Parque Estrela Dalva XI", "Parque Estrela Dalva XI-A", "Parque Estrela Dalva XII",
+        "Parque Estrela Dalva XIII", "Parque Estrela Dalva XIV", "Parque Estrela Dalva XV", "Parque Estrela Dalva XVI",
+        "Parque Estrela Dalva XVII", "Parque Santo Antônio", "Residencial Mangueiras", "Setor de Indústria",
+        "Vila Betel", "Vila Cortes", "Vila Esperança", "Vila Maria Auxiliadora", "Vila Montes Claros",
+        "Vila Montes Claros II", "Vila Paraíso I", "Vila Paraíso II", "Vila Paraíso III", "Vila Parque",
+        "Vila Raio de Luz", "Vila São Luiz", "Vila São Luiz II", "Vila União", "Outros"
+    ])
     endereco = st.text_input("Endereço")
     comentario = st.text_area("Comentário")
     imagem_file = st.file_uploader("Imagem", type=["jpg", "jpeg", "png"])
@@ -108,8 +118,8 @@ elif menu == "Dashboard":
     st.header("📊 Dashboard Interativo")
 
     conn = conectar_banco()
-    status_data = pd.read_sql_query("SELECT status, COUNT(*) as quantidade FROM sistema GROUP BY status", conn)
-    bairro_data = pd.read_sql_query("SELECT bairro, COUNT(*) as quantidade FROM sistema GROUP BY bairro", conn)
+    status_data = pd.read_sql_query("SELECT status, COUNT(*) as Quantidade FROM sistema GROUP BY status", conn)
+    bairro_data = pd.read_sql_query("SELECT bairro, COUNT(*) as Quantidade FROM sistema GROUP BY bairro", conn)
     ranking_data = pd.read_sql_query("""
         SELECT nome, COUNT(*) as total_requerimentos 
         FROM sistema 
@@ -119,12 +129,34 @@ elif menu == "Dashboard":
     """, conn)
     conn.close()
 
+    # 🔹 Gráfico de Barras - Quantidade de Requerimentos por Status
     st.subheader("📌 Quantidade de Requerimentos por Status")
-    fig_status = px.bar(status_data, x="status", y="quantidade", text="quantidade", title="Status dos Requerimentos")
+    conn = conectar_banco()
+    status_data = pd.read_sql_query("SELECT status, COUNT(*) as Quantidade FROM sistema GROUP BY status", conn)
+    conn.close()
+
+    # Definição de cores para cada status
+    status_colors = {
+        "Em Aberto": "red",
+        "Em Andamento": "orange",
+        "Concluído": "green"
+    }
+    
+    # Criar gráfico de barras verticais com cores personalizadas
+    fig_status = px.bar(
+        status_data, 
+        x="status", 
+        y="Quantidade", 
+        color="status",
+        color_discrete_map=status_colors,
+        text="Quantidade",
+        title="Distribuição de Status dos Requerimentos"
+    )
+    fig_status.update_layout(xaxis_title="Status", yaxis_title="Quantidade")
     st.plotly_chart(fig_status)
 
     st.subheader("🏠 Requerimentos por Bairro")
-    fig_bairro = px.bar(bairro_data, x="quantidade", y="bairro", text="quantidade", title="Requerimentos por Bairro")
+    fig_bairro = px.bar(bairro_data, x="Quantidade", y="bairro", text="Quantidade", title="Requerimentos por Bairro")
     st.plotly_chart(fig_bairro)
 
     st.subheader("🏆 Top 10 Usuários")
@@ -137,65 +169,107 @@ elif menu == "Baixar Dados":
     st.header("📥 Baixar Dados")
 
     conn = conectar_banco()
-    data = pd.read_sql_query("SELECT * FROM sistema", conn)
+    query = "SELECT id, data, nome, cpf, telefone, bairro, endereco, comentario, status FROM sistema"
+    data = pd.read_sql_query(query, conn)
     conn.close()
 
     if not data.empty:
-        csv = data.to_csv(index=False).encode("utf-8")
-        st.download_button("📥 Baixar CSV", csv, "dados_fispa.csv", "text/csv")
+        # 🔹 Renomeando colunas para melhor legibilidade
+        data.rename(columns={
+            "id": "ID",
+            "data": "Data do Requerimento",
+            "nome": "Nome do Requerente",
+            "cpf": "CPF",
+            "telefone": "Telefone",
+            "bairro": "Bairro",
+            "endereco": "Endereço",
+            "comentario": "Comentário",
+            "status": "Status"
+        }, inplace=True)
 
+        # 🔹 Ordenando os dados por ID (do mais recente para o mais antigo)
+        data = data.sort_values(by="ID", ascending=False)
+
+        # 🔹 Convertendo para CSV formatado (separador ; para Excel)
+        csv = data.to_csv(index=False, sep=";", encoding="utf-8").encode("utf-8")
+
+        # 🔹 Botão para download
+        st.download_button(
+            label="📥 Baixar CSV Formatado",
+            data=csv,
+            file_name="dados_fispa.csv",
+            mime="text/csv"
+        )
+    else:
+        st.warning("⚠️ Nenhum dado disponível para download.")
 
 # ============================== Tela Status ADM ==============================
 elif menu == "Status ADM":
-    senha = st.text_input("🔑 Digite a senha de acesso", type="password")
+    st.header("🔑 Painel Administrativo - Gerenciamento de Requerimentos")
 
-    if senha == "adm777":
-        st.header("📌 Atualizar Status e Visualizar Imagem")
+    # Solicitação de senha para acesso
+    senha = st.text_input("🔐 Insira a senha de acesso:", type="password")
 
+    # Senha correta para acesso administrativo
+    senha_correta = "adm777"
+
+    if senha == senha_correta:
+        st.success("✅ Acesso autorizado!")
+        
         # Conectar ao banco e buscar dados
         conn = conectar_banco()
-        data = pd.read_sql_query("SELECT id, data, nome, bairro, status, imagem FROM sistema", conn)
+        query = "SELECT id, data, nome, bairro, status, imagem FROM sistema"
+        data = pd.read_sql_query(query, conn)
         conn.close()
 
         if not data.empty:
-            data_display = data.drop(columns=["imagem"])  # Ocultar imagens na tabela
-            st.dataframe(data_display)  # Exibir tabela geral dos requerimentos
+            # Ocultar a coluna de imagem na exibição da tabela
+            data_display = data.drop(columns=["imagem"], errors="ignore")
+            st.subheader("📋 Requerimentos Cadastrados")
+            st.dataframe(data_display)
 
-            # Selecionar um ID
-            id_selecionado = st.selectbox("🔍 Selecione um ID para visualizar detalhes", [""] + data["id"].astype(str).tolist())
+            # Selecionar um ID para visualização detalhada
+            id_selecionado = st.selectbox(
+                "🔍 Selecione um requerimento para detalhes:", 
+                [""] + data["id"].astype(str).tolist()
+            )
 
-            # Verificar se um ID foi selecionado
             if id_selecionado:
                 id_selecionado = int(id_selecionado)  # Converter para inteiro
 
-                # Criar botão para mostrar detalhes do cadastro
-                if st.button("📄 Mostrar Cadastro"):
-                    # Filtrar os dados do requerimento selecionado
-                    requerimento = data[data["id"] == id_selecionado].iloc[0]
+                # Filtrar o requerimento correspondente ao ID selecionado
+                requerimento = data.query("id == @id_selecionado").copy()
 
-                    # Exibir os detalhes do requerimento selecionado
-                    st.subheader(f"📄 Detalhes do Requerimento #{id_selecionado}")
-                    st.write(f"🗓 **Data:** {requerimento['data']}")
-                    st.write(f"👤 **Nome:** {requerimento['nome']}")
-                    st.write(f"🏠 **Bairro:** {requerimento['bairro']}")
-                    st.write(f"📌 **Status:** {requerimento['status']}")
+                if not requerimento.empty:
+                    requerimento = requerimento.iloc[0]  # Obter a primeira linha correspondente
 
-                    # Botão para mostrar a imagem
-                    if st.button(f"📷 Mostrar Imagem do Requerimento"):
+                    # Exibir detalhes do requerimento
+                    with st.expander(f"📄 Detalhes do Requerimento #{id_selecionado}", expanded=True):
+                        st.write(f"🗓 **Data:** {requerimento['data']}")
+                        st.write(f"👤 **Nome:** {requerimento['nome']}")
+                        st.write(f"🏠 **Bairro:** {requerimento['bairro']}")
+                        st.write(f"📌 **Status:** {requerimento['status']}")
+
+                        # Exibir imagem associada ao requerimento, se disponível
                         if requerimento["imagem"]:
-                            st.image(io.BytesIO(requerimento["imagem"]), caption=f"Imagem do Requerimento #{id_selecionado}")
+                            st.image(io.BytesIO(requerimento["imagem"]), caption=f"📷 Imagem do Requerimento #{id_selecionado}")
                         else:
                             st.warning("⚠️ Nenhuma imagem disponível para este requerimento.")
 
-                    # Opção para atualizar o status do requerimento
-                    novo_status = st.selectbox("📍 Novo Status", ["Em Aberto", "Em Andamento", "Concluído"])
+                    # Seção para atualização do status
+                    novo_status = st.selectbox("📍 Atualizar Status:", ["Em Aberto", "Em Andamento", "Concluído"])
 
-                    if st.button("✅ Atualizar Status"):
+                    if st.button("✅ Confirmar Atualização"):
                         conn = conectar_banco()
                         cursor = conn.cursor()
                         cursor.execute("UPDATE sistema SET status = ? WHERE id = ?", (novo_status, id_selecionado))
                         conn.commit()
                         conn.close()
                         st.success(f"✅ Status do Requerimento #{id_selecionado} atualizado para '{novo_status}'!")
+                        st.rerun()
+                else:
+                    st.warning(f"⚠️ Nenhum requerimento encontrado para o ID {id_selecionado}.")
+        else:
+            st.warning("⚠️ Nenhum requerimento cadastrado no sistema.")
     else:
-        st.error("🔒 Senha incorreta.")
+        st.error("🔒 Acesso negado! Senha incorreta.")
